@@ -1,8 +1,9 @@
-from copy import deepcopy
 from decimal import Decimal
-from typing import List
+from math import ceil
 
-mapa = {}
+import networkx as nx
+
+import matplotlib.pyplot as plt
 
 malha = [
     ["A", "B", 10],
@@ -15,109 +16,67 @@ malha = [
     ["B", "C", 3],
 ]
 
-cidades_distancia = []
+origem = "A"
+destino = "D"
+autonomia = Decimal("10.0")
+valor_combustivel = Decimal("2.50")
+
+neighbors = {}
 
 
-def carrega_mapa():
-    for rota in malha:
-        if rota[0] not in mapa:
-            mapa[rota[0]] = {rota[1]: rota[2]}
-
-        else:
-            mapa[rota[0]].update({rota[1]: rota[2]})
-
-        if rota[1] not in mapa:
-            mapa[rota[1]] = {rota[0]: rota[2]}
-
-        else:
-            mapa[rota[1]].update({rota[0]: rota[2]})
+def round_up(n: Decimal, decimals: int = 0) -> float:
+    multiplier = 10 ** decimals
+    return ceil(n * multiplier) / multiplier
 
 
-def itera_percurso(origem: str, destino: str, rotas: List = []) -> int:
-    print(f"Origem: {origem} - Cidades Anteriores: {rotas}")
-    malha_rotas = deepcopy(mapa[origem])
-
-    if origem not in malha_rotas:
-        rotas.append(origem)
-
-    menor_rota = busca_menor_rota(origem, destino, rotas)
-    menor_km = malha_rotas.get(menor_rota, 0)
-
-    if destino == origem:
-        print("Caminho mais curto")
-        print("\oooo/")
-        return rotas
-
-    elif menor_rota is None:
-        origem = rotas[rotas.index(origem) - 1]
-        return itera_percurso(origem, destino, rotas)
-    else:
-        print(f"Próxima menor rota: {menor_rota} / {menor_km} KM")
-        rotas = rotas[: rotas.index(origem) + 1]
-        return itera_percurso(menor_rota, destino, rotas)
+def calcula_frete(
+    total_km: int, autonomia: Decimal, valor_combustivel: Decimal
+) -> float:
+    return round_up((total_km / autonomia) * valor_combustivel, 2)
 
 
-def busca_menor_rota(origem: str, destino: str, cidades_anteriores: List[str]) -> str:
-    rotas = deepcopy(mapa[origem])
-    [rotas.pop(cd, None) for cd in cidades_anteriores]
+Gr = nx.Graph()
+for r in malha:
+    Gr.add_node(r[0])
 
-    if rotas.get(destino, {}):
-        return destino
+for r in malha:
+    Gr.add_edge(r[0], r[1], weight=r[2])
 
-    if rotas:
-        menor_rota = min(rotas.keys(), key=lambda k: rotas[k])
-        return menor_rota
-    else:
-        return None
+for node in list(Gr.nodes()):
+    neighbors[node] = list(Gr.adj[node])
 
+shortest_distance = nx.single_source_dijkstra(Gr, source=origem, target=destino)
+total_frete = calcula_frete(shortest_distance[0], autonomia, valor_combustivel)
 
-def calcula_km(percurso: List[str]):
-    total_km = 0
+print(f"Mapa: {malha}")
 
-    for cidade in range(len(percurso)):
-        if cidade == len(percurso) - 1:
-            break
-        total_km += mapa.get(percurso[cidade]).get(percurso[cidade + 1])
-    return total_km
+print(
+    f"\nOrigem: {origem}, Destino: {destino}, Autonomia Veículo: {autonomia}, Valor combustível: {valor_combustivel}"
+)
+print(
+    f"Menor valor de entrega {total_frete} - Km {shortest_distance[0]} - Rota: {shortest_distance[1]}"
+)
 
+destino = "C"
 
-def calcula_frete(total_km: int, autonomia: Decimal, valor_combustivel: Decimal):
-    return Decimal(total_km / autonomia) * valor_combustivel
+shortest_distance = nx.single_source_dijkstra(Gr, source=origem, target=destino)
+total_frete = calcula_frete(shortest_distance[0], autonomia, valor_combustivel)
 
+print(
+    f"\nOrigem: {origem}, Destino: {destino}, Autonomia Veículo: {autonomia}, Valor combustível: {valor_combustivel}"
+)
+print(
+    f"Menor valor de entrega {total_frete} - Km {shortest_distance[0]} - Rota: {shortest_distance[1]}"
+)
 
-def busca_vizinhos(nome_cidade: str) -> List[str]:
-    for cidade_vizinha, rotas in mapa.items():
-        if nome_cidade == cidade_vizinha:
-            return [rota for rota, km in rotas.items()]
+print("\nCidades Vizinhas: ")
+for k, v in neighbors.items():
+    print(f"Cidade {k}: {v}")
 
-    return []
+labels = nx.get_edge_attributes(Gr, "weight")
+pos = nx.spring_layout(Gr, k=10)
 
+nx.draw(Gr, pos, with_labels=True)
+nx.draw_networkx_edge_labels(Gr, pos, edge_labels=labels)
 
-carrega_mapa()
-print(mapa)
-
-percurso_AD = itera_percurso("A", "D", [])
-print(percurso_AD)
-
-total_km_AD = calcula_km(percurso_AD)
-print(total_km_AD)
-
-total_frete_AD = calcula_frete(total_km_AD, 10, Decimal("2.50"))
-print(round(total_frete_AD, 2))
-
-
-percurso_AC = itera_percurso("A", "C", [])
-print(percurso_AC)
-
-total_km_AC = calcula_km(percurso_AC)
-print(total_km_AC)
-
-total_frete_AC = calcula_frete(total_km_AC, 10, Decimal("2.50"))
-print(round(total_frete_AC, 2))
-
-
-print(f"Cidade A: {busca_vizinhos('A')}")
-print(f"Cidade B: {busca_vizinhos('B')}")
-print(f"Cidade C: {busca_vizinhos('C')}")
-print(f"Cidade D: {busca_vizinhos('D')}")
-print(f"Cidade E: {busca_vizinhos('E')}")
+plt.show()
